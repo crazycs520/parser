@@ -628,6 +628,7 @@ const (
 	AdminShowDDLJobQueries
 	AdminChecksumTable
 	AdminShowSlow
+	AdminRecoverTable
 )
 
 // HandleRange represents a range where handle value >= Begin and < End.

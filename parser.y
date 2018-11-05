@@ -5254,6 +5254,13 @@ AdminStmt:
 			Index: string($5),
 		}
 	}
+|	"ADMIN" "RECOVER" "TABLE" NumList
+	{
+		$$ = &ast.AdminStmt{
+			Tp: ast.AdminRecoverTable,
+			JobIDs: $4.([]int64),
+		}
+	}
 |	"ADMIN" "CLEANUP" "INDEX" TableName Identifier
 	{
 		$$ = &ast.AdminStmt{
