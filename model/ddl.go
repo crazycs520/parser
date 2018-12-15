@@ -52,6 +52,7 @@ const (
 	ActionDropTablePartition     ActionType = 20
 	ActionCreateView             ActionType = 21
 	ActionTruncateTablePartition ActionType = 22
+	ActionRecoverTable           ActionType = 23
 )
 
 // AddIndexStr is a string related to the operation of "add index".
@@ -80,6 +81,7 @@ var actionMap = map[ActionType]string{
 	ActionDropTablePartition:     "drop table partition",
 	ActionCreateView:             "create view",
 	ActionTruncateTablePartition: "truncate table partition",
+	ActionRecoverTable:           "recover table",
 }
 
 // String return current ddl action in string
