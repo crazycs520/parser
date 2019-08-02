@@ -20,6 +20,7 @@ import (
 	hash2 "hash"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode"
 )
 
@@ -29,9 +30,9 @@ import (
 //
 // for example: both DigestHash('select 1') and DigestHash('select 2') => e1c71d1661ae46e09b7aaec1c390957f0d6260410df4e4bc71b9c8d681021471
 func DigestHash(sql string) (result string) {
-	d := digesterPool.Get().(*sqlDigester)
-	result = d.doDigest(sql)
-	digesterPool.Put(d)
+	d := DigesterPool.Get().(*SQLDigester)
+	result = d.DoDigest(sql)
+	DigesterPool.Put(d)
 	return
 }
 
@@ -41,38 +42,41 @@ func DigestHash(sql string) (result string) {
 //
 // for example: Normalize('select 1 from b where a = 1') => 'select ? from b where a = ?'
 func Normalize(sql string) (result string) {
-	d := digesterPool.Get().(*sqlDigester)
-	result = d.doNormalize(sql)
-	digesterPool.Put(d)
+	d := DigesterPool.Get().(*SQLDigester)
+	result = d.DoNormalize(sql)
+	DigesterPool.Put(d)
 	return
 }
 
 // NormalizeDigest combines Normalize and DigestHash into one method.
 func NormalizeDigest(sql string) (normalized, digest string) {
-	d := digesterPool.Get().(*sqlDigester)
-	normalized, digest = d.doNormalizeDigest(sql)
-	digesterPool.Put(d)
+	d := DigesterPool.Get().(*SQLDigester)
+	normalized, digest = d.DoNormalizeDigest(sql)
+	DigesterPool.Put(d)
 	return
 }
 
-var digesterPool = sync.Pool{
+var NewSQLDigesterNum = int64(0)
+
+var DigesterPool = sync.Pool{
 	New: func() interface{} {
-		return &sqlDigester{
+		atomic.AddInt64(&NewSQLDigesterNum, 1)
+		return &SQLDigester{
 			lexer:  NewScanner(""),
 			hasher: sha256.New(),
 		}
 	},
 }
 
-// sqlDigester is used to compute DigestHash or Normalize for sql.
-type sqlDigester struct {
+// SQLDigester is used to compute DigestHash or Normalize for sql.
+type SQLDigester struct {
 	buffer bytes.Buffer
 	lexer  *Scanner
 	hasher hash2.Hash
 	tokens tokenDeque
 }
 
-func (d *sqlDigester) doDigest(sql string) (result string) {
+func (d *SQLDigester) DoDigest(sql string) (result string) {
 	d.normalize(sql)
 	d.hasher.Write(d.buffer.Bytes())
 	d.buffer.Reset()
@@ -81,14 +85,14 @@ func (d *sqlDigester) doDigest(sql string) (result string) {
 	return
 }
 
-func (d *sqlDigester) doNormalize(sql string) (result string) {
+func (d *SQLDigester) DoNormalize(sql string) (result string) {
 	d.normalize(sql)
 	result = string(d.buffer.Bytes())
 	d.buffer.Reset()
 	return
 }
 
-func (d *sqlDigester) doNormalizeDigest(sql string) (normalized, digest string) {
+func (d *SQLDigester) DoNormalizeDigest(sql string) (normalized, digest string) {
 	d.normalize(sql)
 	normalized = string(d.buffer.Bytes())
 	d.hasher.Write(d.buffer.Bytes())
@@ -107,7 +111,7 @@ const (
 	genericSymbolList = -2
 )
 
-func (d *sqlDigester) normalize(sql string) {
+func (d *SQLDigester) normalize(sql string) {
 	d.lexer.reset(sql)
 	for {
 		tok, pos, lit := d.lexer.scan()
@@ -140,7 +144,7 @@ func (d *sqlDigester) normalize(sql string) {
 	d.tokens = d.tokens[:0]
 }
 
-func (d *sqlDigester) reduceOptimizerHint(tok *token) (reduced bool) {
+func (d *SQLDigester) reduceOptimizerHint(tok *token) (reduced bool) {
 	// ignore /*+..*/
 	if tok.tok == hintBegin {
 		for {
@@ -186,7 +190,7 @@ func (d *sqlDigester) reduceOptimizerHint(tok *token) (reduced bool) {
 	return
 }
 
-func (d *sqlDigester) reduceLit(currTok *token) {
+func (d *SQLDigester) reduceLit(currTok *token) {
 	if !d.isLit(*currTok) {
 		return
 	}
@@ -226,7 +230,7 @@ func (d *sqlDigester) reduceLit(currTok *token) {
 	return
 }
 
-func (d *sqlDigester) isPrefixByUnary(currTok int) (isUnary bool) {
+func (d *SQLDigester) isPrefixByUnary(currTok int) (isUnary bool) {
 	if !d.isNumLit(currTok) {
 		return
 	}
@@ -257,7 +261,7 @@ func (d *sqlDigester) isPrefixByUnary(currTok int) (isUnary bool) {
 	return
 }
 
-func (d *sqlDigester) isGenericList(last2 []token) (generic bool) {
+func (d *SQLDigester) isGenericList(last2 []token) (generic bool) {
 	if len(last2) < 2 {
 		return false
 	}
@@ -272,7 +276,7 @@ func (d *sqlDigester) isGenericList(last2 []token) (generic bool) {
 	return
 }
 
-func (d *sqlDigester) isOrderOrGroupBy() (orderOrGroupBy bool) {
+func (d *SQLDigester) isOrderOrGroupBy() (orderOrGroupBy bool) {
 	var (
 		last []token
 		n    int
@@ -298,7 +302,7 @@ func (d *sqlDigester) isOrderOrGroupBy() (orderOrGroupBy bool) {
 	return
 }
 
-func (d *sqlDigester) isStarParam() (starParam bool) {
+func (d *SQLDigester) isStarParam() (starParam bool) {
 	last := d.tokens.back(1)
 	if last == nil {
 		starParam = false
@@ -308,7 +312,7 @@ func (d *sqlDigester) isStarParam() (starParam bool) {
 	return
 }
 
-func (d *sqlDigester) isLit(t token) (beLit bool) {
+func (d *SQLDigester) isLit(t token) (beLit bool) {
 	tok := t.tok
 	if d.isNumLit(tok) || tok == stringLit || tok == bitLit {
 		beLit = true
@@ -318,7 +322,7 @@ func (d *sqlDigester) isLit(t token) (beLit bool) {
 	return
 }
 
-func (d *sqlDigester) isNumLit(tok int) (beNum bool) {
+func (d *SQLDigester) isNumLit(tok int) (beNum bool) {
 	switch tok {
 	case intLit, decLit, floatLit, hexLit:
 		beNum = true
@@ -327,7 +331,7 @@ func (d *sqlDigester) isNumLit(tok int) (beNum bool) {
 	return
 }
 
-func (d *sqlDigester) isComma(tok token) (isComma bool) {
+func (d *SQLDigester) isComma(tok token) (isComma bool) {
 	isComma = tok.lit == ","
 	return
 }
