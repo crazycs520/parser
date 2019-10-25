@@ -6902,6 +6902,10 @@ HintTable:
 	{
 		$$ = ast.HintTable{TableName: model.NewCIStr($1), QBName: $2.(model.CIStr)}
 	}
+ |	Identifier '.' Identifier QueryBlockOpt
+ 	{
+ 		$$ = ast.HintTable{DBName: model.NewCIStr($1), TableName: model.NewCIStr($3), QBName: $4.(model.CIStr)}
+ 	}
 
 HintTableList:
 	HintTable
