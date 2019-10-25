@@ -284,6 +284,7 @@ var tokenMap = map[string]int{
 	"FIXED":                    fixed,
 	"FLOAT":                    floatType,
 	"FLUSH":                    flush,
+	"CLUSTER":                  cluster,
 	"FOLLOWING":                following,
 	"FOR":                      forKwd,
 	"FORCE":                    force,
