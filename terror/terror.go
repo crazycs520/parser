@@ -52,6 +52,14 @@ type ErrClass int
 
 type Error = errors.Error
 
+type Errors interface {
+	Equal(error) bool
+	RFCCode() errors.RFCErrorCode
+	Code() errors.ErrCode
+	ID() errors.ErrorID
+	GetMsg() string
+}
+
 // Error classes.
 var (
 	ClassAutoid     = RegisterErrorClass(1, "autoid")
@@ -179,14 +187,14 @@ func (ec ErrClass) Synthesize(code ErrCode, message string) *Error {
 }
 
 // ToSQLError convert Error to mysql.SQLError.
-func ToSQLError(e *Error) *mysql.SQLError {
+func ToSQLError(e Errors) *mysql.SQLError {
 	code := getMySQLErrorCode(e)
 	return mysql.NewErrf(code, "%s", e.GetMsg())
 }
 
 var defaultMySQLErrorCode uint16
 
-func getMySQLErrorCode(e *Error) uint16 {
+func getMySQLErrorCode(e Errors) uint16 {
 	rfcCode := e.RFCCode()
 	var class ErrClass
 	if index := strings.Index(string(rfcCode), ":"); index > 0 {
@@ -234,8 +242,8 @@ func ErrorEqual(err1, err2 error) bool {
 		return e1 == e2
 	}
 
-	te1, ok1 := e1.(*Error)
-	te2, ok2 := e2.(*Error)
+	te1, ok1 := e1.(Errors)
+	te2, ok2 := e2.(Errors)
 	if ok1 && ok2 {
 		return te1.RFCCode() == te2.RFCCode()
 	}
